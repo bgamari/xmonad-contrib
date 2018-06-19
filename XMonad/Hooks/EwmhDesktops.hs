@@ -86,6 +86,12 @@ data DesktopState
 instance ExtensionClass DesktopState where
     initialValue = DesktopState [] [] Nothing M.empty
 
+newtype ActiveWindow = ActiveWindow Window
+                     deriving (Eq)
+
+instance ExtensionClass ActiveWindow where
+    initialValue = ActiveWindow none
+
 toDesktopState :: ([WindowSpace] -> [WindowSpace]) -> WindowSet -> DesktopState
 toDesktopState f s =
     DesktopState
@@ -129,8 +135,9 @@ ewmhDesktopsLogHookCustom f = withWindowSet $ \s -> do
 
         mapM_ (uncurry setWindowDesktop) (M.toList $ windowDesktops s')
 
-    setActiveWindow
-
+    let activeWindow' = fromMaybe none (W.peek s)
+    whenChanged (ActiveWindow activeWindow') $ do
+        setActiveWindow activeWindow'
 
 -- |
 -- Intercepts messages from pagers and similar applications and reacts on them.
@@ -277,9 +284,8 @@ setSupported = withDisplay $ \dpy -> do
 
     setWMName "xmonad"
 
-setActiveWindow :: X ()
-setActiveWindow = withWindowSet $ \s -> withDisplay $ \dpy -> do
-    let w = fromMaybe none (W.peek s)
+setActiveWindow :: Window -> X ()
+setActiveWindow w = withDisplay $ \dpy -> do
     r <- asks theRoot
     a <- getAtom "_NET_ACTIVE_WINDOW"
     c <- getAtom "WINDOW"
